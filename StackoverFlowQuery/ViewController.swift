@@ -8,13 +8,18 @@
 
 import UIKit
 
+// Called if user presses button in collection view cell to navigate to website
 protocol StackOverflowCellSelectionDelegate: class {
     func buttonTapped(cellIndex: Int)
 }
 
+enum StackOverflowDateType: Int, CaseIterable {
+    case createdDate, lastActivityDate
+}
+
 class ViewController: UIViewController {
     
-    // MARK: - View Controls
+    // MARK: - UI Controls
     lazy var sendQueryButton: UIButton = {
         let button = UIButton(type: .custom)
         button.setBackgroundImage(UIImage(named: "BlueEmpty"), for: .normal)
@@ -29,8 +34,10 @@ class ViewController: UIViewController {
         return button
     }()
     
+    // Custom busy indicator when sending requests to StackExchange
     var loadingActivity: LoadingActivity!
     
+    // Collection view for displaying results
     lazy var collectionView: UICollectionView = {
         let layout = UICollectionViewFlowLayout()
         layout.minimumInteritemSpacing = CGFloat(1000)
@@ -41,15 +48,21 @@ class ViewController: UIViewController {
         return cv
     }()
 
+    // MARK: - State variables
+    
+    // Want to add some extra space at bottom of CollectionView
     var adjustedCollectionViewContentInset = false
     
+    // Items collected from StackExchange are stored in this model array
     var viewModel = [StackExchangeAPI.QuestionQueryResults.ViewModel]()
     
+    // Some test model data to test collection view cells without having to send request to StackExchange.
     var testModelData = StackExchangeAPI.QuestionQueryResults.ViewModel(answerCnt: 2, creationDate: "Sep 25, 2020 at 4:47:35 PM", lastActivityDate: "Sep 25, 2020 at 5:06:54 PM", title: "Trying to make my program deliverable to a windows 10 environment", link: "https://stackoverflow.com/questions/64072175/trying-to-make-my-program-deliverable-to-a-windows-10-environment")
     
     // MARK: - Lifecycle and Views
     override func viewDidLoad() {
         super.viewDidLoad()
+        // Setup UI controls
         setupNavBar()
         setupViews()
         createLoadingActivity()
@@ -57,7 +70,7 @@ class ViewController: UIViewController {
     
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
-        // Add some space at bottom
+        // Add some space at bottom of collection view
         if !adjustedCollectionViewContentInset {
             adjustedCollectionViewContentInset = true
             collectionView.contentInset = UIEdgeInsets(top: 0, left: 0, bottom: 20, right: 0)
@@ -96,7 +109,7 @@ class ViewController: UIViewController {
         // Custom view for showing loading activity
         loadingActivity = LoadingActivity()
         loadingActivity.backgroundColor = .systemBackground
-        loadingActivity.hide()
+        loadingActivity.hide()  // Initially hide until user initiates request
         view.addSubview(loadingActivity)
         loadingActivity.translatesAutoresizingMaskIntoConstraints = false
         loadingActivity.centerXAnchor.constraint(equalTo: view.centerXAnchor).isActive = true
@@ -104,13 +117,20 @@ class ViewController: UIViewController {
     }
     
     // MARK: - Networking handlers
+    private func requestFailedNotification() {
+        let ac = UIAlertController(title: "Error", message: "StackExchange API request failed.", preferredStyle: .alert)
+        let defaultAction = UIAlertAction(title: "OK", style: .default, handler: nil)
+        ac.addAction(defaultAction)
+        self.present(ac, animated: true, completion: nil)
+    }
+    
     private func sendRequest() {
         DispatchQueue.main.async {
             self.sendRequestWithClosure{ (success) in
                 if success {
                     self.collectionView.reloadData()
                 } else {
-                    print("request failed.")
+                    self.requestFailedNotification()
                 }
             }
         }
@@ -160,15 +180,18 @@ class ViewController: UIViewController {
         return requestUrl
     }
     
+    // Used to convert time from unix epoch date/time to a string for display
     private func convertUnixEpochTimeToLocalTime(unixEpochTime: Double) -> String {
         let date = Date(timeIntervalSince1970: unixEpochTime)
         let dateFormatter = DateFormatter()
-        dateFormatter.timeStyle = DateFormatter.Style.medium
-        dateFormatter.dateStyle = DateFormatter.Style.medium
+        // Use shorter forms of date and time if running on an iPhone SE device which has width of 320.
+        dateFormatter.timeStyle = Globals.appBounds.width == Constants.iPhoneSmallWidth ? DateFormatter.Style.short : DateFormatter.Style.medium
+        dateFormatter.dateStyle = Globals.appBounds.width == Constants.iPhoneSmallWidth ? DateFormatter.Style.short : DateFormatter.Style.medium
         dateFormatter.timeZone = .current
         return dateFormatter.string(from: date)
     }
     
+    // Work-horse that sends request to StackExchange.  Reply done on background thread, so any UI activity needs to be scheduled to the main UI thread.
     private func sendRequest(request: URLRequest, completion: @escaping (Bool) -> Void) {
         let task = URLSession.shared.dataTask(with: request) { (data, response, error) in
             if let error = error {
@@ -224,8 +247,8 @@ extension ViewController: UICollectionViewDelegate, UICollectionViewDataSource, 
         if let cell = collectionView.dequeueReusableCell(withReuseIdentifier: StackOverflowCell.reuseIdentifier, for: indexPath) as? StackOverflowCell {
             cell.bodyLabel.text = viewModel[indexPath.item].title
             cell.answerLabel.text = "Answers: \(viewModel[indexPath.item].answerCnt)"
-            cell.headerValues[0].text = viewModel[indexPath.item].creationDate
-            cell.headerValues[1].text = viewModel[indexPath.item].lastActivityDate
+            cell.headerValues[StackOverflowDateType.createdDate.rawValue].text = viewModel[indexPath.item].creationDate
+            cell.headerValues[StackOverflowDateType.lastActivityDate.rawValue].text = viewModel[indexPath.item].lastActivityDate
             cell.tag = indexPath.item
             cell.delegate = self
             return cell
@@ -259,6 +282,7 @@ extension ViewController {
         collectionView.reloadData()
     }
     
+    // Animate the QueryButton press by scaling the button smaller and back to identity
     @objc private func animateDown(sender: UIButton) {
         UIView.animate(withDuration: 0.2, delay: 0, options: .curveEaseOut, animations: {
             sender.transform = CGAffineTransform(scaleX: 0.8, y: 0.8)

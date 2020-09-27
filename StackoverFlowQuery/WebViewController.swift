@@ -24,7 +24,8 @@ class WebViewController: UIViewController {
     }
 
     deinit {
-       print("WebViewController deinit called")
+        // Uncomment out below line to check for retain cycles.  If print does not occur in console then need to investigate further why view controller was not de-allocated.
+        // print("WebViewController deinit called")
     }
 
     override func viewDidLoad() {
