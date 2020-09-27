@@ -268,7 +268,6 @@ extension ViewController: StackOverflowCellSelectionDelegate {
         let urlString = viewModel[cellIndex].link
         let vc = WebViewController(urlString: urlString)
         vc.view.backgroundColor = .systemBackground
-        vc.urlString = testModelData.link
         vc.navigationItem.title = "StackOverflow"
         navigationController?.navigationBar.tintColor = .white
         navigationController?.pushViewController(vc, animated: true)
