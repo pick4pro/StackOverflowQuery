@@ -38,16 +38,8 @@ class StackOverflowCell: UICollectionViewCell {
         v.backgroundColor = .white
         v.translatesAutoresizingMaskIntoConstraints = false
         v.accessibilityIdentifier = "BodyView"
-        return v
-    }()
-    
-    let bottomView: UIView = {
-        let v = UIView()
-        v.backgroundColor = .white
         v.layer.cornerRadius = 8
         v.layer.maskedCorners = [.layerMaxXMaxYCorner, .layerMinXMaxYCorner]
-        v.translatesAutoresizingMaskIntoConstraints = false
-        v.accessibilityIdentifier = "BottomView"
         return v
     }()
     
@@ -58,7 +50,7 @@ class StackOverflowCell: UICollectionViewCell {
         label.font = UIFont.systemFont(ofSize: 14, weight: .medium)
         label.translatesAutoresizingMaskIntoConstraints = false
         label.text = "Question"
-        label.accessibilityIdentifier = "AnswerLabel"
+        label.accessibilityIdentifier = "QuestionLabel"
         return label
     }()
     
@@ -95,6 +87,7 @@ class StackOverflowCell: UICollectionViewCell {
         button.setTitleColor(.black, for: .normal)
         button.setTitleColor(.white, for: .selected)
         button.layer.cornerRadius = 8
+        button.accessibilityIdentifier = "NavigateButton"
         button.translatesAutoresizingMaskIntoConstraints = false
         return button
     }()
@@ -158,7 +151,7 @@ class StackOverflowCell: UICollectionViewCell {
             label.font = UIFont.systemFont(ofSize: 12, weight: .regular)
             label.textAlignment = .center
             label.text = headerTextLabels[i]
-            label.accessibilityIdentifier = "Header Label - \(i)"
+            label.accessibilityIdentifier = "HeaderLabel - \(i)"
             headerLabels.append(label)
             headerStackLabels.addArrangedSubview(label)
         }
@@ -170,7 +163,7 @@ class StackOverflowCell: UICollectionViewCell {
             label.font = UIFont.systemFont(ofSize: 12, weight: .regular)
             label.textAlignment = .center
             label.text = "placeholder"
-            label.accessibilityIdentifier = "Header Label - \(i)"
+            label.accessibilityIdentifier = "HeaderValue - \(i)"
             headerValues.append(label)
             headerStackValues.addArrangedSubview(label)
         }
@@ -187,8 +180,7 @@ class StackOverflowCell: UICollectionViewCell {
         bodyView.addSubview(questionLabel)
         bodyView.addSubview(bodyLabel)
         bodyView.addSubview(answerLabel)
-        containerView.addSubview(bottomView)
-        bottomView.addSubview(bottomButton)
+        bodyView.addSubview(bottomButton)
         
         // Add all of the constraints
         containerView.widthAnchor.constraint(equalToConstant: width).isActive = true
@@ -199,7 +191,9 @@ class StackOverflowCell: UICollectionViewCell {
         headerView.topAnchor.constraint(equalTo: containerView.topAnchor).isActive = true
         headerView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor).isActive = true
         headerView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor).isActive = true
-        headerView.heightAnchor.constraint(equalToConstant: 60).isActive = true
+        let heightConstraint = headerView.heightAnchor.constraint(equalToConstant: 60)
+        heightConstraint.priority = UILayoutPriority(999)
+        heightConstraint.isActive = true
         
         headerVerticalStack.centerYAnchor.constraint(equalTo: headerView.centerYAnchor).isActive = true
         headerVerticalStack.leadingAnchor.constraint(equalTo: headerView.leadingAnchor).isActive = true
@@ -208,7 +202,7 @@ class StackOverflowCell: UICollectionViewCell {
         bodyView.topAnchor.constraint(equalTo: headerView.bottomAnchor).isActive = true
         bodyView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor).isActive = true
         bodyView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor).isActive = true
-        bodyView.bottomAnchor.constraint(equalTo: bottomView.topAnchor).isActive = true
+        bodyView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor).isActive = true
         
         questionLabel.topAnchor.constraint(equalTo: bodyView.topAnchor, constant: 10).isActive = true
         questionLabel.leadingAnchor.constraint(equalTo: bodyView.leadingAnchor, constant: 10).isActive = true
@@ -217,29 +211,23 @@ class StackOverflowCell: UICollectionViewCell {
         bodyLabel.topAnchor.constraint(equalTo: questionLabel.bottomAnchor, constant: 10).isActive = true
         bodyLabel.leadingAnchor.constraint(equalTo: bodyView.leadingAnchor, constant: 10).isActive = true
         bodyLabel.trailingAnchor.constraint(equalTo: bodyView.trailingAnchor, constant: -10).isActive = true
-        // bodyLabel.bottomAnchor.constraint(equalTo: bodyView.bottomAnchor, constant: -10).isActive = true
         
         answerLabel.topAnchor.constraint(equalTo: bodyLabel.bottomAnchor, constant: 10).isActive = true
         answerLabel.leadingAnchor.constraint(equalTo: bodyView.leadingAnchor, constant: 10).isActive = true
         answerLabel.trailingAnchor.constraint(equalTo: bodyView.trailingAnchor, constant: -10).isActive = true
-        answerLabel.bottomAnchor.constraint(equalTo: bodyView.bottomAnchor, constant: -10).isActive = true
-
-        bottomView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor).isActive = true
-        bottomView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor).isActive = true
-        bottomView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor).isActive = true
+        answerLabel.bottomAnchor.constraint(equalTo: bottomButton.topAnchor, constant: -10).isActive = true
 
         bottomButton.addTarget(self, action: #selector(buttonPressed(sender:)), for: .touchUpInside)
-        bottomButton.heightAnchor.constraint(equalToConstant: 40).isActive = true
         bottomButton.widthAnchor.constraint(equalToConstant: 160).isActive = true
-        bottomButton.bottomAnchor.constraint(equalTo: bottomView.bottomAnchor, constant: -15).isActive = true
-        bottomButton.topAnchor.constraint(equalTo: bottomView.topAnchor, constant: 10).isActive = true
-        bottomButton.centerXAnchor.constraint(equalTo: bottomView.centerXAnchor).isActive = true
+        bottomButton.centerXAnchor.constraint(equalTo: bodyView.centerXAnchor).isActive = true
+        let constraint = bottomButton.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -12)
+        constraint.priority = UILayoutPriority(999)
+        constraint.isActive = true
         
         addShadowToContainerView()
     }
     
     @objc func buttonPressed(sender: UIButton) {
-        print("button pressed")
         delegate?.buttonTapped(cellIndex: self.tag)
     }
     
