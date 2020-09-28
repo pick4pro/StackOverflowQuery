@@ -77,6 +77,18 @@ class StackOverflowCell: UICollectionViewCell {
         return label
     }()
     
+    var answerContentLabel: UILabel = {
+        let label = UILabel()
+        label.textColor = .black
+        label.font = UIFont.systemFont(ofSize: 14, weight: .regular)
+        label.numberOfLines = 0
+        label.lineBreakMode = .byWordWrapping
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.text = "placeholder"
+        label.accessibilityIdentifier = "AnswerContentLabel"
+        return label
+    }()
+    
     let buttonWidth = CGFloat(160)
     let buttonHeight = CGFloat(40)
     let bottomButton: UIButton = {
@@ -180,6 +192,7 @@ class StackOverflowCell: UICollectionViewCell {
         bodyView.addSubview(questionLabel)
         bodyView.addSubview(bodyLabel)
         bodyView.addSubview(answerLabel)
+        bodyView.addSubview(answerContentLabel)
         bodyView.addSubview(bottomButton)
         
         // Add all of the constraints
@@ -215,12 +228,16 @@ class StackOverflowCell: UICollectionViewCell {
         answerLabel.topAnchor.constraint(equalTo: bodyLabel.bottomAnchor, constant: 10).isActive = true
         answerLabel.leadingAnchor.constraint(equalTo: bodyView.leadingAnchor, constant: 10).isActive = true
         answerLabel.trailingAnchor.constraint(equalTo: bodyView.trailingAnchor, constant: -10).isActive = true
-        answerLabel.bottomAnchor.constraint(equalTo: bottomButton.topAnchor, constant: -10).isActive = true
+        
+        answerContentLabel.topAnchor.constraint(equalTo: answerLabel.bottomAnchor, constant: 10).isActive = true
+        answerContentLabel.leadingAnchor.constraint(equalTo: bodyView.leadingAnchor, constant: 10).isActive = true
+        answerContentLabel.trailingAnchor.constraint(equalTo: bodyView.trailingAnchor, constant: -10).isActive = true
+        answerContentLabel.bottomAnchor.constraint(equalTo: bottomButton.topAnchor, constant: -10).isActive = true
 
         bottomButton.addTarget(self, action: #selector(buttonPressed(sender:)), for: .touchUpInside)
         bottomButton.widthAnchor.constraint(equalToConstant: 160).isActive = true
         bottomButton.centerXAnchor.constraint(equalTo: bodyView.centerXAnchor).isActive = true
-        let constraint = bottomButton.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -12)
+        let constraint = bottomButton.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -20)
         constraint.priority = UILayoutPriority(999)
         constraint.isActive = true
         

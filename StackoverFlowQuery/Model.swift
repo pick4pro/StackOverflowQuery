@@ -11,7 +11,11 @@ import UIKit
 enum StackExchangeAPI {
     enum QuestionQueryResults {
         struct ViewModel {
+            var questionId: Int
             var answerCnt: Int
+            var answerIds: [Int]
+            var answers: [String]
+            var acceptedAnswerId: Int
             var creationDate: String
             var lastActivityDate: String
             var title: String

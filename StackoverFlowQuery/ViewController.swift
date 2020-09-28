@@ -56,8 +56,8 @@ class ViewController: UIViewController {
     // Items collected from StackExchange are stored in this model array
     var viewModel = [StackExchangeAPI.QuestionQueryResults.ViewModel]()
     
-    // Some test model data to test collection view cells without having to send request to StackExchange.
-    var testModelData = StackExchangeAPI.QuestionQueryResults.ViewModel(answerCnt: 2, creationDate: "Sep 25, 2020 at 4:47:35 PM", lastActivityDate: "Sep 25, 2020 at 5:06:54 PM", title: "Trying to make my program deliverable to a windows 10 environment", link: "https://stackoverflow.com/questions/64072175/trying-to-make-my-program-deliverable-to-a-windows-10-environment")
+    // Test data for testing rendering of cell without needing to hit network to get test data.
+    var testData = StackExchangeAPI.QuestionQueryResults.ViewModel(questionId: 64093100, answerCnt: 2, answerIds: [64093206, 64093124], answers: ["<p>Try this:</p>\n<pre><code>&lt;div onLoad={this.removeItem}&gt;\n&lt;/div&gt;\n\n\n//paste this function anywhere above render()\nremoveItem() {\n  localStorage.removeItem(&quot;key&quot;);\n}\n</code></pre>\n","<pre class=\"lang-js prettyprint-override\"><code>useEffect(() =&gt; { \n    removeItem();\n}, [])\n</code></pre>\n"], acceptedAnswerId: 64093124, creationDate: "Sep 27, 2020 at 2:37:29 PM", lastActivityDate: "Sep 27, 2020 at 4:48:46 PM", title: "React: remove localstorage item on page load", link: "https://stackoverflow.com/questions/64093100/react-remove-localstorage-item-on-page-load")
     
     // MARK: - Lifecycle and Views
     override func viewDidLoad() {
@@ -116,6 +116,46 @@ class ViewController: UIViewController {
         loadingActivity.centerYAnchor.constraint(equalTo: view.centerYAnchor).isActive = true
     }
     
+    // MARK: - High level functions for retrieving Questions, AnswerIds, and Answers
+    private func getQuestions() {
+        DispatchQueue.main.async {
+            self.loadingActivity.startAnimating(true)
+            self.sendRequestWithClosure{ (success) in
+                if success {
+                    self.getAnswers()
+                } else {
+                    self.loadingActivity.stopAnimating()
+                    self.requestFailedNotification()
+                }
+            }
+        }
+    }
+    
+    private func getAnswers() {
+        // Api only allows upto 100 questionIds for getting answerIds and answers, to be safe just use 90
+        if viewModel.count > 90 {
+            var itemsToRemove = viewModel.count - 90
+            while itemsToRemove >= 0 {
+                viewModel.removeLast()
+                itemsToRemove -= 1
+            }
+        }
+        
+        let questionCount = viewModel.count
+        var questionIdsStr = ""
+        for i in 0..<questionCount {
+            questionIdsStr += String(viewModel[i].questionId)
+            if i < (questionCount - 1) { questionIdsStr += ";" }
+        }
+        
+        getAnswersFromQuestionIds(questionIdsStr: questionIdsStr) { (success) in
+            DispatchQueue.main.async {
+                self.loadingActivity.stopAnimating()
+                self.collectionView.reloadData()
+            }
+        }
+    }
+    
     // MARK: - Networking handlers
     private func requestFailedNotification() {
         let ac = UIAlertController(title: "Error", message: "StackExchange API request failed.", preferredStyle: .alert)
@@ -124,24 +164,11 @@ class ViewController: UIViewController {
         self.present(ac, animated: true, completion: nil)
     }
     
-    private func sendRequest() {
-        DispatchQueue.main.async {
-            self.sendRequestWithClosure{ (success) in
-                if success {
-                    self.collectionView.reloadData()
-                } else {
-                    self.requestFailedNotification()
-                }
-            }
-        }
-    }
-    
     private func sendRequestWithClosure(completion: @escaping (Bool) -> Void) {
         if let request = createRequestURL() {
             loadingActivity.startAnimating(true)
-            sendRequest(request: request) { (success) in
+            getQuestions(request: request) { (success) in
                 DispatchQueue.main.async {
-                    self.loadingActivity.stopAnimating()
                     completion(success)
                 }
             }
@@ -191,8 +218,8 @@ class ViewController: UIViewController {
         return dateFormatter.string(from: date)
     }
     
-    // Work-horse that sends request to StackExchange.  Reply done on background thread, so any UI activity needs to be scheduled to the main UI thread.
-    private func sendRequest(request: URLRequest, completion: @escaping (Bool) -> Void) {
+    // Query StackExchange for recent questions
+    private func getQuestions(request: URLRequest, completion: @escaping (Bool) -> Void) {
         let task = URLSession.shared.dataTask(with: request) { (data, response, error) in
             if let error = error {
                 print("\(error.localizedDescription)")
@@ -208,25 +235,72 @@ class ViewController: UIViewController {
                             // Remove items from viewModel array and re-populate with JSON results
                             self.viewModel.removeAll()
                             for item in json["items"].arrayValue {
+                                let questionId = item["question_id"].intValue
                                 let answerCnt = item["answer_count"].intValue
+                                let acceptedAnswerId = item["accepted_answer_id"].intValue
                                 let creationDate = self.convertUnixEpochTimeToLocalTime(unixEpochTime: item["creation_date"].doubleValue)
                                 let lastActivityDate = self.convertUnixEpochTimeToLocalTime(unixEpochTime: item["last_activity_date"].doubleValue)
                                 let title = item["title"].stringValue
                                 let link = item["link"].stringValue
-                                let model = StackExchangeAPI.QuestionQueryResults.ViewModel(answerCnt: answerCnt, creationDate: creationDate, lastActivityDate: lastActivityDate, title: title, link: link)
+                                let model = StackExchangeAPI.QuestionQueryResults.ViewModel(questionId: questionId, answerCnt: answerCnt, answerIds: [], answers: [], acceptedAnswerId: acceptedAnswerId, creationDate: creationDate, lastActivityDate: lastActivityDate, title: title, link: link)
                                 self.viewModel.append(model)
                             }
                         }
                     }
                     completion(true)
                 } else {
-                    print("error statusCode: \(httpResponse.statusCode)")
+                    print("getQuestions, error statusCode: \(httpResponse.statusCode)")
                     completion(false)
                 }
             }
         }
         task.resume()
     }
+    
+    // Query StackExchange to get list of answerIds for a previous question represented by the modelIndex as input
+    private func getAnswersFromQuestionIds(questionIdsStr: String, completion: @escaping (Bool) -> Void) {
+        let urlStr = "https://api.stackexchange.com/2.2/questions/\(questionIdsStr)/answers?page=1&pagesize=100&order=desc&sort=activity&site=stackoverflow&filter=!9_bDE(fI5"
+        guard let url = URL(string: urlStr) else { return }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 5.0
+        
+        let task = URLSession.shared.dataTask(with: request) { (data, response, error) in
+            if let error = error {
+                print("\(error.localizedDescription)")
+                completion(false)
+            }
+            
+            if let httpResponse = response as? HTTPURLResponse {
+                if httpResponse.statusCode == 200 {
+                    if let data = data {
+                        // Use Swifty JSON to easily access the raw data as JSON for parsing
+                        if let json = try? JSON(data: data) {
+                            // Use JSON results to create model data for display.
+                            // Find model item
+                            for item in json["items"].arrayValue {
+                                let questionId = item["question_id"].intValue
+                                // Find questionId in our viewModel array
+                                if let modelIndex = self.viewModel.firstIndex(where: { $0.questionId == questionId }) {
+                                    let answerId = item["answer_id"].intValue
+                                    let acceptedAnswer = item["is_accepted"].boolValue
+                                    let answer = item["body"].stringValue
+                                    self.viewModel[modelIndex].answerIds.append(answerId)
+                                    self.viewModel[modelIndex].answers.append(answer)
+                                    if acceptedAnswer { self.viewModel[modelIndex].acceptedAnswerId = answerId }
+                                }
+                            }
+                        }
+                    }
+                    completion(true)
+                } else {
+                    print("getAnswerIdsfromQuestion, error statusCode: \(httpResponse.statusCode)")
+                    completion(false)
+                }
+            }
+        }
+        task.resume()
+    }
+
 }
 
 // MARK: - Collection view delegates
@@ -240,7 +314,7 @@ extension ViewController: UICollectionViewDelegate, UICollectionViewDataSource, 
     }
 
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        viewModel.count
+        return viewModel.count
     }
     
     func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
@@ -251,6 +325,26 @@ extension ViewController: UICollectionViewDelegate, UICollectionViewDataSource, 
             cell.headerValues[StackOverflowDateType.lastActivityDate.rawValue].text = viewModel[indexPath.item].lastActivityDate
             cell.tag = indexPath.item
             cell.delegate = self
+            var str = ""
+            let answerCnt = viewModel[indexPath.item].answers.count
+            for i in 0..<answerCnt {
+                if i == 0 {
+                    str += viewModel[indexPath.item].acceptedAnswerId == viewModel[indexPath.item].answerIds[i] ? "Accepted Answer:<p></p>" : "Answer:<p></p>"
+                } else {
+                    str += viewModel[indexPath.item].acceptedAnswerId == viewModel[indexPath.item].answerIds[i] ? "<p></p>Accepted Answer:<p></p>" : "<p></p>Answer:<p></p>"
+                }
+                str += viewModel[indexPath.item].answers[i]
+            }
+            if answerCnt > 0 {
+                // convert potential html content to attributed string
+                // displays a little better but with out a style set it still does not render that great.
+                let attributedText = str.htmlToAttributedString
+                let attributes : [NSAttributedString.Key: Any] = [
+                    NSAttributedString.Key.font : UIFont.systemFont(ofSize: 12, weight: .regular),
+                    NSAttributedString.Key.foregroundColor : UIColor.black]
+                attributedText?.addAttributes(attributes, range: NSRange(location: 0, length: attributedText!.length))
+                cell.answerContentLabel.attributedText = attributedText
+            }
             return cell
         }
         return UICollectionViewCell()
@@ -296,8 +390,22 @@ extension ViewController {
         UIView.animate(withDuration: 0.2, delay: 0, options: .curveEaseOut, animations: {
             sender.transform = .identity
         }) { (_) in
-            self.sendRequest()
+            self.getQuestions()
         }
+    }
+}
+
+extension String {
+    var htmlToAttributedString: NSMutableAttributedString? {
+        guard let data = data(using: .utf8) else { return nil }
+        do {
+            return try NSMutableAttributedString(data: data, options: [.documentType: NSAttributedString.DocumentType.html, .characterEncoding:String.Encoding.utf8.rawValue], documentAttributes: nil)
+        } catch {
+            return nil
+        }
+    }
+    var htmlToString: String {
+        return htmlToAttributedString?.string ?? ""
     }
 }
 
